@@ -42,7 +42,7 @@ struct TabBar: View {
             ZStack(alignment: .leading) {
                 // The empty half of the strip is what you grab to move the
                 // window; the tabs keep the run they sit on.
-                DragStrip(reserved: lights + dot + leading + (making ? min(540, row.room) : row.run) + Metrics.tabGap + Metrics.plusWidth, trailing: doors + 12, onDoubleClick: browser.newTab)
+                DragStrip(reserved: lights + dot + leading + (making ? min(540, row.room) : row.run) + Metrics.tabGap + Metrics.plusWidth, trailing: doors + 12, onDoubleClick: browser.newTab, makeMenu: { GroupFoldMenu.menu(for: browser) })
                 // And the corner the lights sit in, which is title bar too —
                 // the one stretch left to take hold of when tabs fill the row.
                 DragStrip()
@@ -441,7 +441,7 @@ struct TabBar: View {
         let extra = pairWidthExtra(in: looseTabs, base: each, splits: browser.splits)
         let headers = browser.prefs.usesTabGroups ? CGFloat(browser.tabGroups.count) : 0
         let headingWidth = browser.prefs.usesTabGroups
-            ? browser.tabGroups.reduce(CGFloat.zero) { $0 + GroupHeading.width(for: $1.name, numbered: browser.prefs.showsTabShortcuts && $1.collapsed) } : 0
+            ? browser.tabGroups.reduce(CGFloat.zero) { $0 + GroupHeading.width(for: $1.name, numbered: browser.prefs.showsTabShortcuts && $1.collapsed, marked: $1.domain != nil) } : 0
         let shown = Int(pinned + loose + headers)
         var total = pinned * Metrics.pinWidth + loose * each + extra
             + headingWidth + CGFloat(max(0, shown - 1)) * Metrics.tabGap
@@ -482,7 +482,7 @@ struct TabBar: View {
             guard count > 0 else { return Metrics.tabWidth }
             let extra = pairWidthExtra(in: items, base: Metrics.tabMinWidth, splits: browser.splits)
             let spent = CGFloat(pins) * Metrics.pinWidth + extra
-                + browser.tabGroups.reduce(CGFloat.zero) { $0 + GroupHeading.width(for: $1.name, numbered: browser.prefs.showsTabShortcuts && $1.collapsed) }
+                + browser.tabGroups.reduce(CGFloat.zero) { $0 + GroupHeading.width(for: $1.name, numbered: browser.prefs.showsTabShortcuts && $1.collapsed, marked: $1.domain != nil) }
                 + CGFloat(max(0, pins + count + browser.tabGroups.count - 1)) * Metrics.tabGap
                 + (pinLine ? PinLine.space : 0)
             return max(Metrics.tabMinWidth, min(Metrics.tabWidth, (room(in: strip) - spent) / CGFloat(count)))
@@ -1474,6 +1474,10 @@ struct TabMenu: View {
     @ViewBuilder
     private var singleMenu: some View {
         if browser.prefs.usesTabGroups && tab.pin == nil && !tab.shy && !tab.bench {
+            if browser.prefs.groupsByDomain {
+                Button("Group Tabs by Domain") { browser.groupTabsByDomain() }
+                    .disabled(!browser.canGroupTabsByDomain)
+            }
             Menu("Move to Group") {
                 Button("New Group") { browser.addTabGroup(containing: tab) }
                 if !browser.tabGroups.isEmpty { Divider() }
@@ -1651,6 +1655,17 @@ struct TabMenu: View {
         }
         Button("Close Other Tabs") { browser.closeOthers(but: tab) }
             .disabled(browser.tabs.count < 2)
+        if picked > 1, browser.prefs.groupsByDomain, browser.prefs.usesTabGroups {
+            Button("Group Selected Tabs by Domain") { browser.groupTabsByDomain() }
+                .shortcut("tabs.groupDomain")
+                .disabled(!browser.canGroupTabsByDomain)
+        }
+        Button("Close Duplicate Tabs") { browser.closeDuplicateTabs() }
+            .shortcut("tabs.closeDuplicates")
+            .disabled(!browser.canCloseDuplicateTabs)
+        Button("Sleep Other Tabs") { browser.sleepOtherTabs() }
+            .shortcut("tabs.sleepOthers")
+            .disabled(!browser.canSleepOtherTabs)
         Button(browser.prefs.sidebar ? "Close Tabs Below" : "Close Tabs to the Right") { browser.closeTabsBelow(tab) }
             .disabled(browser.tabsBelow(tab).isEmpty)
         // ⌘⇧T, and the History menu's Recently Closed, where few think to

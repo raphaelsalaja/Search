@@ -73,6 +73,27 @@ Space keys (Control+1–9 by default) and the modifier used to peek at a link ca
 
 With Split View on, `⌥⌘N` splits the current page and `⌃⌘←` / `⌃⌘→` go from one page to the other. `⌘W` closes the focused tab and gives the remaining page the whole area. Tabs › Separate Split Tabs keeps both tabs open separately.
 
+### Grouping, duplicates, and bookmarks
+
+Group Tabs by Domain is off until you turn it on in Settings › Tabs. It gathers the space you're in by the site's name, without the ending: google.com, google.de and mail.google.co.uk become one group named Google, and a name you wouldn't guess (example.com) is just capitalised. With several tabs selected, only those are grouped. Open All in Tabs, on a folder in the Bookmarks panel, opens every bookmark in it, subfolders included, in order. More than 20 asks first and says how many. The new tabs load when you go to them.
+
+| Command | Key |
+|---|---|
+| Group Tabs by Domain | `⌃⇧G` |
+| Group Tabs by Domain in All Windows | `⌃⇧A` |
+| Ungroup All | `⌃⇧U` |
+| Ungroup All Domains | `⌃⌥U` |
+| Expand All Groups | `⌃⇧]` |
+| Collapse All Groups | `⌃⇧[` |
+| Fold All Groups (View menu) | `⌥⌘[` |
+| Unfold All Groups (View menu) | `⌥⌘]` |
+| Close Group | `⌃⇧W` |
+| Copy Group Addresses | `⌃⇧C` |
+| Reopen Closed Group | `⌃⇧T` |
+| Close Duplicate Tabs | `⌃⇧D` |
+| Sleep Other Tabs | `⌃⇧S` |
+| Open All in Tabs | Bookmarks folder menu |
+
 ---
 
 ## For developers

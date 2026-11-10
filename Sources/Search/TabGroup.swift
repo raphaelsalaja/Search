@@ -6,17 +6,24 @@ struct TabGroup: Codable, Identifiable, Equatable {
     var id: UUID
     var name: String
     var collapsed: Bool
+    /// The site this group was gathered for, when Tabs › Group Tabs by
+    /// Domain made it (or adopted a group already named for that site).
+    /// Nil on a group made by hand. Missing in sessions written before
+    /// then, which is the same thing: not a site's group.
+    var domain: String? = nil
 }
 
 extension TabGroup {
-    private enum Keys: String, CodingKey { case id, name, collapsed }
+    private enum Keys: String, CodingKey { case id, name, collapsed, domain }
 
-    /// A group saved without its folded state is an open one.
+    /// A group saved without its folded state is an open one. A site key
+    /// this version doesn't understand is ignored, and the group still loads.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
         collapsed = (try? c.decodeIfPresent(Bool.self, forKey: .collapsed)) ?? false
+        domain = try? c.decodeIfPresent(String.self, forKey: .domain)
     }
 }
 

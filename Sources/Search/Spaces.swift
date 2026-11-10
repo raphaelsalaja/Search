@@ -793,7 +793,8 @@ enum Ask {
     }
 
     /// `returnCancels`: Return is Cancel's, for a yes that can't be undone.
-    static func sure(_ title: String, detail: String, confirm: String, returnCancels: Bool = false, then: @escaping () -> Void) {
+    /// `destructive`: the confirming button is red. Opening tabs isn't.
+    static func sure(_ title: String, detail: String, confirm: String, returnCancels: Bool = false, destructive: Bool = true, then: @escaping () -> Void) {
         if Store.testing, let yes = testing {
             if yes { then() }
             return
@@ -802,7 +803,7 @@ enum Ask {
         alert.messageText = title
         alert.informativeText = detail
         let yes = alert.addButton(withTitle: confirm)
-        yes.hasDestructiveAction = true
+        if destructive { yes.hasDestructiveAction = true }
         let no = alert.addButton(withTitle: "Cancel")
         guard returnCancels else {
             show(alert) { ok in if ok { then() } }

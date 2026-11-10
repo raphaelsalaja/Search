@@ -636,6 +636,11 @@ final class Preferences: ObservableObject {
     /// adds a command, so there is no switch. Still a property, for the
     /// code that asks and the tests that turn it off; never written.
     @Published var usesTabGroups = true
+    /// Tabs › Group Tabs by Domain (⌃⇧G). Off unless asked for: the command
+    /// isn't in the menu, and nothing about the row changes.
+    @Published var groupsByDomain: Bool {
+        didSet { store.set(groupsByDomain, forKey: "tabs.groupDomain") }
+    }
     /// Arc's three tiers in the sidebar: the squares, pins kept as rows
     /// under them, and a line with Clear above the tabs that come and go
     /// (see Tab.listed). Off unless asked for.
@@ -850,6 +855,7 @@ final class Preferences: ObservableObject {
         // existed; they are not asked to sit through it.
         welcomed = store.bool(forKey: "welcomed") || store.object(forKey: "glyph") != nil
         usesSpaces = store.bool(forKey: "spaces")
+        groupsByDomain = store.bool(forKey: "tabs.groupDomain")
         profilesInOneWindow = store.bool(forKey: "profiles.oneWindow")
         listsPins = store.bool(forKey: "pins.list")
         // "Pins keep their site" is one switch over two keys (see
@@ -977,6 +983,7 @@ final class Preferences: ObservableObject {
         take(\.roomyTabs, store.bool(forKey: "sidebar.roomy"))
         take(\.sideIcons, store.bool(forKey: "sidebar.icons"))
         take(\.foldsToIcons, store.bool(forKey: "sidebar.foldIcons"))
+        take(\.groupsByDomain, store.bool(forKey: "tabs.groupDomain"))
         take(\.sideWidth, "sidebar.width", (store.object(forKey: "sidebar.width") as? Double).map { CGFloat($0) }
             .flatMap { (Metrics.sideMin...Metrics.sideMax).contains($0) ? $0 : nil }, or: Metrics.side)
         take(\.sidePanelWidth, "sidepanel.width", (store.object(forKey: "sidepanel.width") as? Double).map { CGFloat($0) }

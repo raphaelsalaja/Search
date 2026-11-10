@@ -248,6 +248,62 @@ struct Command: Identifiable {
         Command("tabs.copyAddress", "Copy Address", .tabs, KeyCombo("c", shift: true)) { $0.copyAddress() },
         Command("tabs.copyMarkdown", "Copy as Markdown Link", .tabs, nil) { $0.copyMarkdownLink() },
         Command("tabs.pasteAndGo", "Paste and Go", .tabs, KeyCombo("v", shift: true)) { $0.pasteAndGo() },
+        // ⌃⇧G. ⌘G and ⇧⌘G are Find Next and Find Previous. Off unless
+        // Settings › Tabs asks for it, and then the key is the page's.
+        Command("tabs.groupDomain", "Group Tabs by Domain", .tabs, KeyCombo("g", command: false, shift: true, control: true)) { browser in
+            guard browser.prefs.groupsByDomain else { return }
+            browser.groupTabsByDomain()
+        },
+        // ⌃⇧A. ⌘A is the Mac's Select All, and stays that.
+        Command("tabs.groupAllWindows", "Group Tabs by Domain in All Windows", .tabs, KeyCombo("a", command: false, shift: true, control: true)) { browser in
+            guard browser.prefs.groupsByDomain else { return }
+            browser.groupTabsByDomainInAllWindows()
+        },
+        // ⌃⇧] and ⌃⇧[. ⌥⌘] and ⌥⌘[ already unfold and fold; ⌘] and ⌘[ go
+        // forward and back; ⇧⌘] and ⇧⌘[ are the next and previous tab.
+        Command("tabs.expandGroups", "Expand All Groups", .tabs, KeyCombo("]", command: false, shift: true, control: true)) { browser in
+            guard browser.canUnfoldAllGroups else { return }
+            browser.foldAllGroups(false)
+        },
+        Command("tabs.collapseGroups", "Collapse All Groups", .tabs, KeyCombo("[", command: false, shift: true, control: true)) { browser in
+            guard browser.canFoldAllGroups else { return }
+            browser.foldAllGroups(true)
+        },
+        // ⌃⌥U. ⌃⇧U is Ungroup All, which also takes apart a group made by hand.
+        Command("tabs.ungroupDomains", "Ungroup All Domains", .tabs, KeyCombo("u", command: false, option: true, control: true)) { browser in
+            guard browser.prefs.groupsByDomain else { return }
+            browser.ungroupAllDomains()
+        },
+        // ⌃⇧U. Not ⇧⌘U, which lists what is hidden on this site.
+        Command("tabs.ungroupAll", "Ungroup All", .tabs, KeyCombo("u", command: false, shift: true, control: true)) { browser in
+            guard browser.canUngroupAll else { return }
+            browser.ungroupAll()
+        },
+        // ⌃⇧W. ⇧⌘W closes the window, ⌘W the tab.
+        Command("tabs.closeGroup", "Close Group", .tabs, KeyCombo("w", command: false, shift: true, control: true)) { browser in
+            guard browser.canCloseActiveGroup else { return }
+            browser.closeActiveGroup()
+        },
+        // ⌃⇧C. ⇧⌘C copies the page's address, ⌥⌘C inspects an element.
+        Command("tabs.copyGroup", "Copy Group Addresses", .tabs, KeyCombo("c", command: false, shift: true, control: true)) { browser in
+            guard let id = browser.activeGroupID else { return }
+            browser.copyGroupAddresses(id)
+        },
+        // ⌃⇧T. ⇧⌘T reopens whatever closed last, which may be one tab.
+        Command("tabs.reopenGroup", "Reopen Closed Group", .tabs, KeyCombo("t", command: false, shift: true, control: true)) { browser in
+            guard browser.canReopenClosedGroup else { return }
+            browser.reopenClosedGroup()
+        },
+        // ⌃⇧D. ⌘D duplicates the tab, ⇧⌘D darkens the site.
+        Command("tabs.closeDuplicates", "Close Duplicate Tabs", .tabs, KeyCombo("d", command: false, shift: true, control: true)) { browser in
+            guard browser.canCloseDuplicateTabs else { return }
+            browser.closeDuplicateTabs()
+        },
+        // ⌃⇧S. ⌘S folds the tabs away, ⇧⌘S moves them between the top and the side.
+        Command("tabs.sleepOthers", "Sleep Other Tabs", .tabs, KeyCombo("s", command: false, shift: true, control: true)) { browser in
+            guard browser.canSleepOtherTabs else { return }
+            browser.sleepOtherTabs()
+        },
         Command("tabs.closeOthers", "Close Other Tabs", .tabs, nil) { browser in
             if let tab = browser.active { browser.closeOthers(but: tab) }
         },
@@ -499,4 +555,8 @@ extension Command {
     static let ai: Set<String> = ["view.summarize", "view.ask"]
     /// Dark pages': with them off, not listed, and their keys go on to the page.
     static let dusk: Set<String> = ["view.dusk", "view.duskPause"]
+    /// Group Tabs by Domain and Ungroup All Domains. With it off, not
+    /// listed, and ⌃⇧G goes on to the page. Expand All and Collapse All
+    /// stay listed: they fold every group, whether or not that command is on.
+    static let domainGroups: Set<String> = ["tabs.groupDomain", "tabs.groupAllWindows", "tabs.ungroupDomains"]
 }

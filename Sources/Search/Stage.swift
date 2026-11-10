@@ -714,6 +714,10 @@ struct DragStrip: NSViewRepresentable {
     /// the tabs, where a double-click opens a new tab instead of zooming the
     /// window.
     var onDoubleClick: (() -> Void)? = nil
+    /// A right-click on the empty part of the row. The strip takes that
+    /// click itself, so a SwiftUI menu on the view behind it never sees it.
+    /// Not `menu`: NSView already has that, and Strip is one.
+    var makeMenu: (() -> NSMenu)? = nil
 
     func makeNSView(context: Context) -> NSView { Strip() }
 
@@ -722,6 +726,7 @@ struct DragStrip: NSViewRepresentable {
         (view as? Strip)?.below = below
         (view as? Strip)?.trailing = trailing
         (view as? Strip)?.onDoubleClick = onDoubleClick
+        (view as? Strip)?.makeMenu = makeMenu
     }
 
     private final class Strip: NSView {
@@ -729,6 +734,7 @@ struct DragStrip: NSViewRepresentable {
         var below: CGFloat = 0
         var trailing: CGFloat = 0
         var onDoubleClick: (() -> Void)?
+        var makeMenu: (() -> NSMenu)?
 
         private var pressed: NSEvent?
         private var moved = false
@@ -777,6 +783,14 @@ struct DragStrip: NSViewRepresentable {
             let count = max(0, (Strip.hovered[id] ?? 0) + (on ? 1 : -1))
             Strip.hovered[id] = count == 0 ? nil : count
             window.isMovable = count == 0
+        }
+
+        override func rightMouseDown(with event: NSEvent) {
+            guard let built = makeMenu?() else {
+                super.rightMouseDown(with: event)
+                return
+            }
+            NSMenu.popUpContextMenu(built, with: event, for: self)
         }
 
         override func mouseDown(with event: NSEvent) {

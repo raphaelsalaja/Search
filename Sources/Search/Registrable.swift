@@ -13,6 +13,24 @@ enum Registrable {
         return name
     }
 
+    /// The name in front of the public suffix. google.com, google.de and
+    /// mail.google.co.uk are all "google"; foo.github.io stays "foo", apart
+    /// from bar.github.io. An address, localhost, or a host whose suffix
+    /// can't be told stays whole, so nothing is guessed off the front of it.
+    static func label(of host: String, isSuffix: ((String) -> Bool)?) -> String {
+        let site = domain(of: host, isSuffix: isSuffix)
+        guard let isSuffix else { return site }
+        let labels = site.split(separator: ".").map(String.init)
+        guard labels.count >= 2 else { return site }
+        // Longest suffix first: co.uk, not uk, and github.io, not io.
+        for count in stride(from: labels.count - 1, through: 1, by: -1)
+        where isSuffix(labels.suffix(count).joined(separator: ".")) {
+            guard let name = labels.dropLast(count).last, !name.isEmpty else { return site }
+            return name
+        }
+        return site
+    }
+
     /// Whether two hosts are one site: the same host, or the same
     /// registrable domain (idmsa.apple.com and account.apple.com). Never for
     /// an address, nor when the domain couldn't be worked out.
