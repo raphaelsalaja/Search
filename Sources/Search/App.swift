@@ -312,6 +312,24 @@ struct SearchApp: App {
                 Button("Paste and Go") { browser.pasteAndGo() }
                     .shortcut("tabs.pasteAndGo")
                 Divider()
+                if browser.prefs.groupsByDomain, browser.prefs.usesTabGroups {
+                    Button("Group Tabs by Domain") { browser.groupTabsByDomain() }
+                        .shortcut("tabs.groupDomain")
+                        .disabled(!browser.canGroupTabsByDomain)
+                    Button("Ungroup All Domains") { browser.ungroupAllDomains() }
+                        .shortcut("tabs.ungroupDomains")
+                        .disabled(!browser.canUngroupAllDomains)
+                }
+                // Both stay, greyed when every group is already that way.
+                // Fold All and Unfold All in the View menu are the same
+                // actions on the other keys.
+                Button("Expand All Groups") { browser.foldAllGroups(false) }
+                    .shortcut("tabs.expandGroups")
+                    .disabled(!browser.canUnfoldAllGroups)
+                Button("Collapse All Groups") { browser.foldAllGroups(true) }
+                    .shortcut("tabs.collapseGroups")
+                    .disabled(!browser.canFoldAllGroups)
+                Divider()
                 Button("Close Other Tabs") { if let tab = browser.active { browser.closeOthers(but: tab) } }
                     .shortcut("tabs.closeOthers")
                     .disabled(browser.tabs.count < 2)
@@ -1454,6 +1472,33 @@ struct ContentView: View {
             if combo == store.key(for: "tabs.focusOtherPane") { browser.focusOtherPane(); return true }
         }
 
+        // ⌃⇧G, unless Settings › Shortcuts moved it. Off, the key is the
+        // page's: the menu line isn't there either. Taken here because a
+        // menu line that appears after launch doesn't take its key.
+        if browser.prefs.groupsByDomain, browser.prefs.usesTabGroups, !event.isARepeat,
+           let combo = KeyCombo(event: event), combo == ShortcutStore.shared.key(for: "tabs.groupDomain") {
+            browser.groupTabsByDomain()
+            return true
+        }
+
+        // ⌃⇧[ collapses every group of this space, ⌃⇧] expands them. A key
+        // with nothing to do is left for the page; the menu line is greyed
+        // the same way. Taken here so a rebound key still works on a page,
+        // where the menu's own shortcut never arrives.
+        if !event.isARepeat, let combo = KeyCombo(event: event) {
+            let store = ShortcutStore.shared
+            if combo == store.key(for: "tabs.collapseGroups") {
+                guard browser.canFoldAllGroups else { return false }
+                browser.foldAllGroups(true)
+                return true
+            }
+            if combo == store.key(for: "tabs.expandGroups") {
+                guard browser.canUnfoldAllGroups else { return false }
+                browser.foldAllGroups(false)
+                return true
+            }
+        }
+
         // ⌘Return keeps a peek, as its other button does: Return or the
         // keypad's Enter, by the key rather than what it types, whatever Caps
         // Lock says. Not while typing in the peeked page — a comment box or
@@ -1522,6 +1567,8 @@ struct ContentView: View {
                 if Command.split.contains(command.id), !browser.prefs.splitView { return false }
                 if Command.ai.contains(command.id), !browser.prefs.ai { return false }
                 if Command.dusk.contains(command.id), !browser.prefs.darkensPages { return false }
+                if Command.domainGroups.contains(command.id),
+                   !browser.prefs.groupsByDomain || !browser.prefs.usesTabGroups { return false }
                 command.run(browser)
                 return true
             }

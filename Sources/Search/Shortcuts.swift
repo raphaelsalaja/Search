@@ -248,6 +248,26 @@ struct Command: Identifiable {
         Command("tabs.copyAddress", "Copy Address", .tabs, KeyCombo("c", shift: true)) { $0.copyAddress() },
         Command("tabs.copyMarkdown", "Copy as Markdown Link", .tabs, nil) { $0.copyMarkdownLink() },
         Command("tabs.pasteAndGo", "Paste and Go", .tabs, KeyCombo("v", shift: true)) { $0.pasteAndGo() },
+        // ⌃⇧G. ⌘G and ⇧⌘G are Find Next and Find Previous. Off unless
+        // Settings › Tabs asks for it, and then the key is the page's.
+        Command("tabs.groupDomain", "Group Tabs by Domain", .tabs, KeyCombo("g", command: false, shift: true, control: true)) { browser in
+            guard browser.prefs.groupsByDomain else { return }
+            browser.groupTabsByDomain()
+        },
+        // ⌃⇧] and ⌃⇧[. ⌥⌘] and ⌥⌘[ already unfold and fold; ⌘] and ⌘[ go
+        // forward and back; ⇧⌘] and ⇧⌘[ are the next and previous tab.
+        Command("tabs.expandGroups", "Expand All Groups", .tabs, KeyCombo("]", command: false, shift: true, control: true)) { browser in
+            guard browser.canUnfoldAllGroups else { return }
+            browser.foldAllGroups(false)
+        },
+        Command("tabs.collapseGroups", "Collapse All Groups", .tabs, KeyCombo("[", command: false, shift: true, control: true)) { browser in
+            guard browser.canFoldAllGroups else { return }
+            browser.foldAllGroups(true)
+        },
+        Command("tabs.ungroupDomains", "Ungroup All Domains", .tabs, nil) { browser in
+            guard browser.prefs.groupsByDomain else { return }
+            browser.ungroupAllDomains()
+        },
         Command("tabs.closeOthers", "Close Other Tabs", .tabs, nil) { browser in
             if let tab = browser.active { browser.closeOthers(but: tab) }
         },
@@ -499,4 +519,8 @@ extension Command {
     static let ai: Set<String> = ["view.summarize", "view.ask"]
     /// Dark pages': with them off, not listed, and their keys go on to the page.
     static let dusk: Set<String> = ["view.dusk", "view.duskPause"]
+    /// Group Tabs by Domain and Ungroup All Domains. With it off, not
+    /// listed, and ⌃⇧G goes on to the page. Expand All and Collapse All
+    /// stay listed: they fold every group, whether or not that command is on.
+    static let domainGroups: Set<String> = ["tabs.groupDomain", "tabs.ungroupDomains"]
 }

@@ -76,7 +76,7 @@ struct SideBar: View {
         ZStack(alignment: .top) {
             // Not under the card for a new space: it isn't made of views that
             // would take the click first.
-            DragStrip(reserved: 0, below: browser.makingSpace ? .greatestFiniteMagnitude : rowsEnd, onDoubleClick: browser.newTab)
+            DragStrip(reserved: 0, below: browser.makingSpace ? .greatestFiniteMagnitude : rowsEnd, onDoubleClick: browser.newTab, makeMenu: { GroupFoldMenu.menu(for: browser) })
 
             // The band the lights sit in is this mode's title bar: the window
             // is dragged by it and a double-click fills the screen with it,
