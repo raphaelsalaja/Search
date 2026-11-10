@@ -580,6 +580,7 @@ struct SettingsPanel: View {
                 get: { prefs.showsAddress },
                 set: { on in withAnimation(Motion.glide) { prefs.showsAddress = on } }
             ))
+        case "tabs.groupDomain": Switch(on: $prefs.groupsByDomain)
         case "note.groups", "note.awake": Always()
         default: EmptyView()
         }

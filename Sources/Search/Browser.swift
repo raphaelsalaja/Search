@@ -5027,7 +5027,7 @@ final class Browser: NSObject, ObservableObject {
     /// groups' order, then the tabs in none. The one place that order is
     /// made, run after every change to the row (see `tabs`) and to a group.
     /// Nothing while groups are off: the row stays as you left it.
-    private func arrangeGroupedTabs(_ on: Bool? = nil) {
+    func arrangeGroupedTabs(_ on: Bool? = nil) {
         guard on ?? prefs.usesTabGroups else { return }
         let representatives = displayedTabs
         let pins = representatives.filter { $0.pin != nil }

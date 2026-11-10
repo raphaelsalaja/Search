@@ -17,6 +17,8 @@ in [ROADMAP.md](ROADMAP.md).
 
 ### Added
 
+- Group tabs by domain. Tabs › Group Tabs by Domain (⌃⇧G) gathers the open tabs of the space you're in by site, so mail.google.com and docs.google.com share a group named Google, with the site's icon once a tab already has one. Ungroup All Domains sits beside it; Close Group is on the group's own menu, as for any group. Pins, private tabs and a Split View pair of two different sites stay where they are, and a pair of one site stays a pair inside its group. The groups are the ones the row already has, so they come back with the space. Off unless you turn it on in Settings › Tabs › Group tabs by domain.
+- Expand All Groups (⌃⇧]) and Collapse All Groups (⌃⇧[) fold every group of the space you're in, from the Tabs menu, a group's menu, or a right-click on the empty part of the tab row. Each is greyed when every group is already that way. The same actions stay on ⌥⌘] and ⌥⌘[ in the View menu.
 - ⌘S can make the column icons only instead of hiding it, so the tabs stay in sight; ⌘S again brings the titles back. Off unless you turn on Settings › Appearance › Tabs › ⌘S makes the column icons only. Not with the tabs across the top, nor with the column hidden until the pointer reaches the edge. Asked for by [@vincent-caetano](https://github.com/vincent-caetano) ([#1008](https://github.com/driceroland/Search/issues/1008)). Thanks [@Chahine-tech](https://github.com/Chahine-tech) ([#1015](https://github.com/driceroland/Search/pull/1015))
 
 ### Held back
