@@ -70,7 +70,7 @@ struct GroupHeading: View {
     /// Measured once a name: the row asks for every heading's on every redraw.
     private static var measured: [String: CGFloat] = [:]
     private static let font = NSFont.systemFont(ofSize: 12.5, weight: .medium)
-    static func width(for name: String, numbered: Bool = false) -> CGFloat {
+    static func width(for name: String, numbered: Bool = false, marked: Bool = false) -> CGFloat {
         let text: CGFloat
         if let known = measured[name] {
             text = known
@@ -79,18 +79,33 @@ struct GroupHeading: View {
             if measured.count > 500 { measured.removeAll() }
             measured[name] = text
         }
-        return text + 20 + (numbered ? 23 : 0)
+        // A site's icon, when the group was gathered by domain and one of
+        // its tabs already has one. Room for it either way: the icon arrives
+        // a moment after the group does.
+        return text + 20 + (numbered ? 23 : 0) + (marked ? 22 : 0)
     }
 
     var body: some View {
         if compact { short } else { long }
     }
 
+    /// A tab of a site's group, so its icon can stand in the heading once
+    /// the page has one. Nothing fetched, and nothing for a group made by hand.
+    private var siteTab: Tab? {
+        guard group.domain != nil else { return nil }
+        let members = browser.tabs.filter { $0.groupID == group.id && $0.pin == nil }
+        return members.first { $0.icon != nil } ?? members.first
+    }
+
     /// The column of icons' heading: the letter, a fold mark beside it.
     private var short: some View {
         HStack(spacing: 2) {
-            Text(group.name.first.map { String($0).uppercased() } ?? "•")
-                .font(.system(size: 9.5, weight: .semibold))
+            if let tab = siteTab {
+                GroupLetter(tab: tab, letter: group.name.first.map { String($0).uppercased() } ?? "•")
+            } else {
+                Text(group.name.first.map { String($0).uppercased() } ?? "•")
+                    .font(.system(size: 9.5, weight: .semibold))
+            }
             Image(systemName: "chevron.down")
                 .font(.system(size: 6.5, weight: .bold))
                 .rotationEffect(.degrees(group.collapsed ? -90 : 0))
@@ -134,6 +149,8 @@ struct GroupHeading: View {
                     .focused($focused)
                     .onSubmit(commit)
                     .onExitCommand { browser.editingGroupID = nil }
+            } else if let tab = siteTab {
+                GroupTitle(tab: tab, name: group.name)
             } else {
                 Text(group.name)
                     .font(.system(size: 12.5, weight: .medium))
@@ -186,6 +203,87 @@ struct GroupHeading: View {
     }
 }
 
+/// The group's name, with its site's icon beside it once a tab already
+/// has one. Nothing is fetched. No icon, and the heading is the name alone,
+/// as a group made by hand.
+private struct GroupTitle: View {
+    @ObservedObject var tab: Tab
+    let name: String
+
+    var body: some View {
+        HStack(spacing: tab.icon == nil ? 0 : 8) {
+            if tab.icon != nil {
+                Mark(icon: tab.icon, letter: "", size: 14)
+            }
+            Text(name)
+                .font(.system(size: 12.5, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(minWidth: 0, alignment: .leading)
+        }
+    }
+}
+
+/// The column of icons: the site's icon, or the group's letter until then.
+private struct GroupLetter: View {
+    @ObservedObject var tab: Tab
+    let letter: String
+
+    var body: some View {
+        Mark(icon: tab.icon, letter: letter, size: 12)
+    }
+}
+
+/// Expand All Groups and Collapse All Groups, for a right-click on the
+/// empty part of the tab row. Both are always there; the one with nothing
+/// to do is greyed, as in the Tabs menu.
+@MainActor
+enum GroupFoldMenu {
+    private final class Action: NSObject {
+        let run: () -> Void
+        init(_ run: @escaping () -> Void) { self.run = run }
+        @objc func fire() { run() }
+    }
+
+    private static var actions: [Action] = []
+
+    static func menu(for browser: Browser) -> NSMenu {
+        actions = []
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.addItem(item("Expand All Groups", key: "]", enabled: browser.canUnfoldAllGroups) {
+            browser.foldAllGroups(false)
+        })
+        menu.addItem(item("Collapse All Groups", key: "[", enabled: browser.canFoldAllGroups) {
+            browser.foldAllGroups(true)
+        })
+        menu.addItem(.separator())
+        menu.addItem(item("Ungroup All", key: "u", enabled: browser.canUngroupAll) {
+            browser.ungroupAll()
+        })
+        menu.addItem(item("Close Duplicate Tabs", key: "d", enabled: browser.canCloseDuplicateTabs) {
+            browser.closeDuplicateTabs()
+        })
+        menu.addItem(item("Sleep Other Tabs", key: "s", enabled: browser.canSleepOtherTabs) {
+            browser.sleepOtherTabs()
+        })
+        menu.addItem(item("Reopen Closed Group", key: "t", enabled: browser.canReopenClosedGroup) {
+            browser.reopenClosedGroup()
+        })
+        return menu
+    }
+
+    private static func item(_ title: String, key: String, enabled: Bool, _ run: @escaping () -> Void) -> NSMenuItem {
+        let action = Action(run)
+        actions.append(action)
+        let item = NSMenuItem(title: title, action: #selector(Action.fire), keyEquivalent: key)
+        item.target = action
+        item.keyEquivalentModifierMask = [.control, .shift]
+        item.isEnabled = enabled
+        return item
+    }
+}
+
 /// What both headings answer to: their place for a drop, a tab or a
 /// group let go on them, being picked up, and their menu.
 private struct GroupHeadingShared: ViewModifier {
@@ -222,6 +320,14 @@ private struct GroupHeadingShared: ViewModifier {
             .contextMenu {
                 Button("Rename Group") { browser.editingGroupID = group.id }
                 Button(group.collapsed ? "Expand Group" : "Collapse Group") { browser.toggleTabGroup(group.id) }
+                // Every group of this space, not only this one. Both stay
+                // in the menu: the one with nothing to do is greyed.
+                Button("Expand All Groups") { browser.foldAllGroups(false) }
+                    .shortcut("tabs.expandGroups")
+                    .disabled(!browser.canUnfoldAllGroups)
+                Button("Collapse All Groups") { browser.foldAllGroups(true) }
+                    .shortcut("tabs.collapseGroups")
+                    .disabled(!browser.canFoldAllGroups)
                 // The whole group into another space, still a group there: Arc's
                 // folders came in wherever Arc had them.
                 if browser.prefs.usesSpaces, browser.spaces.count > 1 {
@@ -236,8 +342,15 @@ private struct GroupHeadingShared: ViewModifier {
                     }
                 }
                 Divider()
+                Button("Copy Addresses") { browser.copyGroupAddresses(group.id) }
+                    .shortcut("tabs.copyGroup")
+                    .disabled(browser.groupAddresses(group.id).isEmpty)
                 Button("Ungroup Tabs") { browser.removeTabGroup(group.id) }
+                Button("Ungroup All") { browser.ungroupAll() }
+                    .shortcut("tabs.ungroupAll")
+                    .disabled(!browser.canUngroupAll)
                 Button("Close Group") { browser.closeTabGroup(group.id) }
+                    .shortcut("tabs.closeGroup")
             }
     }
 }

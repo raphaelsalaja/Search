@@ -2262,6 +2262,19 @@ final class Browser: NSObject, ObservableObject {
         announce("Address copied")
     }
 
+    /// Every address in a group, one to a line, in the order the row keeps them.
+    func groupAddresses(_ id: UUID) -> [String] {
+        tabs(in: id).compactMap { ($0.pending ?? $0.address)?.absoluteString }
+    }
+
+    func copyGroupAddresses(_ id: UUID) {
+        let links = groupAddresses(id)
+        guard !links.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(links.joined(separator: "\n"), forType: .string)
+        announce(links.count == 1 ? "1 address copied" : "\(links.count) addresses copied")
+    }
+
     /// ⌥⇧⌘C. The address without its tracking parameters (CleanLink).
     func copyCleanLink() {
         guard let url = active?.address else { return }
@@ -4358,6 +4371,34 @@ final class Browser: NSObject, ObservableObject {
         select(keep)
     }
 
+    /// Copies of an address already open. The one on screen stays; so does
+    /// a pin. The rest close, and one ⇧⌘T brings that batch back.
+    func closeDuplicateTabs() {
+        let going = duplicateTabs
+        guard !going.isEmpty else { return }
+        let ids = Set(going.map(\.id))
+        closingTogether(.tabs) { _ in
+            let pages = tabs.filter { ids.contains($0.id) }
+            for tab in pages where !visibleTabIDs.contains(tab.id) { close(tab) }
+            for tab in pages where visibleTabIDs.contains(tab.id) { close(tab) }
+        }
+    }
+
+    var canCloseDuplicateTabs: Bool { !duplicateTabs.isEmpty }
+
+    private var duplicateTabs: [Tab] {
+        let rows = tabs.map { tab in
+            DuplicateTabs.Tab(
+                id: tab.id,
+                url: (tab.pending ?? tab.address)?.absoluteString,
+                active: visibleTabIDs.contains(tab.id),
+                pinned: tab.pin != nil
+            )
+        }
+        let closing = Set(DuplicateTabs.closing(rows))
+        return tabs.filter { closing.contains($0.id) }
+    }
+
     /// The row already follows the groups' order, including folded members.
     /// Both pages of the clicked split stay; pins keep their places too.
     func tabsBelow(_ tab: Tab) -> [Tab] {
@@ -4468,6 +4509,15 @@ final class Browser: NSObject, ObservableObject {
             }
         }
         return took
+    }
+
+    /// The last group Close Group took, even if a tab was closed after it.
+    var canReopenClosedGroup: Bool { ghosts.contains { $0.kind == .group } }
+
+    /// That group, whole, the way ⇧⌘T brings back whatever closed last.
+    func reopenClosedGroup() {
+        guard let ghost = ghosts.last(where: { $0.kind == .group }) else { return }
+        reopen(ghost)
     }
 
     /// ⌘⇧T. Back into the row at the place it left.
@@ -4921,6 +4971,20 @@ final class Browser: NSObject, ObservableObject {
     var canFoldAllGroups: Bool { prefs.usesTabGroups && tabGroups.contains { !$0.collapsed } }
     var canUnfoldAllGroups: Bool { prefs.usesTabGroups && tabGroups.contains { $0.collapsed } }
 
+    /// Every group in this space, taken apart. The tabs stay open, back
+    /// among the ones in no group. Hand-made groups go too, which Ungroup
+    /// All Domains leaves alone.
+    func ungroupAll() {
+        guard canUngroupAll else { return }
+        for tab in tabs { tab.groupID = nil }
+        tabGroups.removeAll()
+        editingGroupID = nil
+        arrangeGroupedTabs()
+        writeSession(now: true)
+    }
+
+    var canUngroupAll: Bool { prefs.usesTabGroups && !tabGroups.isEmpty }
+
     func removeTabGroup(_ id: UUID) {
         guard tabGroups.contains(where: { $0.id == id }) else { return }
         for tab in tabs where tab.groupID == id { tab.groupID = nil }
@@ -4945,6 +5009,17 @@ final class Browser: NSObject, ObservableObject {
         // The group goes with its last tab; an empty one goes here.
         if tabGroups.contains(where: { $0.id == id }) { removeTabGroup(id) }
         writeSession(now: true)
+    }
+
+    /// The group the page on screen is in, if it is in one.
+    var activeGroupID: UUID? { active.flatMap { group(of: $0) } }
+
+    var canCloseActiveGroup: Bool { activeGroupID != nil }
+
+    /// Tabs › Close Group: the group you are in, the same as its own menu.
+    func closeActiveGroup() {
+        guard let id = activeGroupID else { return }
+        closeTabGroup(id)
     }
 
     func move(_ tab: Tab, toGroup id: UUID?) {
@@ -5027,7 +5102,7 @@ final class Browser: NSObject, ObservableObject {
     /// groups' order, then the tabs in none. The one place that order is
     /// made, run after every change to the row (see `tabs`) and to a group.
     /// Nothing while groups are off: the row stays as you left it.
-    private func arrangeGroupedTabs(_ on: Bool? = nil) {
+    func arrangeGroupedTabs(_ on: Bool? = nil) {
         guard on ?? prefs.usesTabGroups else { return }
         let representatives = displayedTabs
         let pins = representatives.filter { $0.pin != nil }
@@ -5571,6 +5646,56 @@ final class Browser: NSObject, ObservableObject {
         renameTabGroup(id, to: name)
         editingGroupID = nil
         for tab in opened.dropFirst() { move(tab, toGroup: id) }
+    }
+
+    /// Every page in these bookmarks, in this space, in the order they are
+    /// kept. Each tab is brought back the way a session's is — a title and
+    /// an address, and no web view until you go to it — so a folder of
+    /// thousands doesn't start thousands of processes. The first is the one
+    /// in front. A page already open here is left as it is. Grouping by
+    /// site is its own command and isn't run from here.
+    func openAllInTabs(_ nodes: [Bookmark]) {
+        if websitePopup {
+            tabDestination.openAllInTabs(nodes)
+            return
+        }
+        let open = Set(tabs.compactMap { ($0.pending ?? $0.address)?.absoluteString })
+        let fresh = Bookmarks.unopened(Bookmarks.pages(in: nodes), among: open)
+        guard !fresh.isEmpty else { return }
+        // Typed, not inferred. A single-expression `self?.…` closure is
+        // `() -> ()?`, and Ask.sure's `then` takes `() -> Void` (Xcode,
+        // macOS SDK 27.2). The `return` keeps it from being one expression.
+        let go: () -> Void = { [weak self] in
+            self?.openAsleep(fresh)
+            return
+        }
+        guard fresh.count > Bookmarks.openAllConfirmCount else {
+            go()
+            return
+        }
+        Ask.sure(
+            "Open \(fresh.count) Tabs?",
+            detail: "They open in this space and load when you go to them.",
+            confirm: "Open",
+            destructive: false,
+            then: go
+        )
+    }
+
+    /// At the end of this space's row. `restore` is what a session tab gets:
+    /// nothing is fetched, and no web view exists, until `select` wakes the
+    /// one in front.
+    private func openAsleep(_ pages: [(url: URL, title: String)]) {
+        guard !pages.isEmpty else { return }
+        let made = pages.map { page -> Tab in
+            let tab = Tab(configuration: Web.configuration(space: spaceID))
+            prepare(tab)
+            tab.restore(url: page.url, title: page.title)
+            return tab
+        }
+        tabs.append(contentsOf: made)
+        bookmarksOpen = false
+        if let first = made.first { select(first) }
     }
 
     /// ⌘⇧N. A tab that keeps nothing — its own cookies, its own sign-ins, no

@@ -240,6 +240,19 @@ extension Browser {
         return nil
     }
 
+    /// Every tab but the one on screen (and the other page of a split).
+    /// Each goes the way Put to Sleep does: unsaved typing stays, and the
+    /// view is let go until you go back to it.
+    func sleepOtherTabs() {
+        for tab in tabs where awake(because: tab) == nil {
+            sleep(tab)
+        }
+    }
+
+    var canSleepOtherTabs: Bool {
+        tabs.contains { awake(because: $0) == nil }
+    }
+
     /// Asks the page whether it holds anything typed, pictures it, then lets
     /// it go — looking again at each step, since each takes a moment and you
     /// may have gone back to the tab in the meantime.

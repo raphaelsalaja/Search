@@ -219,6 +219,10 @@ enum SettingsIndex {
               title: "Show the address on the tab you're on", detail: "Its site in place of its title; the title comes back under the pointer",
               more: "Look-alike names in other alphabets show as they really are, and plain http says Not secure. Off, the tab you're on still says so for those two.",
               keys: ["tabs.address"], words: ["url", "domain", "security", "address bar"]),
+        .init(id: "tabs.groupDomain", group: "tabbar", icon: "rectangle.3.group",
+              title: "Group tabs by domain", detail: "Tabs › Group Tabs by Domain gathers this space's tabs by site",
+              more: "mail.google.com and docs.google.com share a group named Google. Pins and private tabs stay put. Off, the command isn't there.",
+              keys: ["tabs.groupDomain"], words: ["group", "domain", "folder", "site", "eTLD"]),
 
         // Browsing
         .init(id: "search.engine", group: "search", icon: "magnifyingglass",

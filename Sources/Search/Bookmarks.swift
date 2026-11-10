@@ -101,6 +101,36 @@ final class Bookmarks {
         }
     }
 
+    /// Opening more tabs than this asks first, and says how many. A folder
+    /// brought in from another browser can hold thousands.
+    nonisolated static let openAllConfirmCount = 20
+
+    /// Every page these bookmarks keep, in the order they are kept. A folder
+    /// is opened where it sits, so a bookmark after it stays after everything
+    /// inside it. An empty folder adds nothing. A bookmarklet is not a page:
+    /// it runs in the one you already have open.
+    nonisolated static func pages(in nodes: [Bookmark]) -> [(url: URL, title: String)] {
+        nodes.flatMap { node -> [(url: URL, title: String)] in
+            if node.isFolder { return pages(in: node.children ?? []) }
+            guard let url = node.address, canOpen(url) else { return [] }
+            return [(url, node.unnamed ? "" : node.title)]
+        }
+    }
+
+    /// `pages` this space doesn't already show, in the order given. One
+    /// listed twice is kept the first time, which is its place in the folder.
+    /// Compared as written: the same address with a different slash is a
+    /// different page, and finding that out costs one set.
+    nonisolated static func unopened(_ pages: [(url: URL, title: String)], among open: Set<String>) -> [(url: URL, title: String)] {
+        var seen = open
+        return pages.filter { seen.insert($0.url.absoluteString).inserted }
+    }
+
+    private nonisolated static func canOpen(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https" || scheme == "file"
+    }
+
     /// Every folder in the tree, each with how deep it sits — for "move to
     /// folder" lists, where a folder three deep should look like it.
     static func folders(_ nodes: [Bookmark], depth: Int = 0) -> [(node: Bookmark, depth: Int)] {
@@ -717,6 +747,9 @@ struct BookmarkOutline: View {
     var shown: Bookmark.ID? = nil
     let open: (URL) -> Void
     let openInNewTab: (URL) -> Void
+    /// A folder's pages, including the folders inside it. The list's own
+    /// empty space opens the top level; this is one folder.
+    var openFolder: (Bookmark) -> Void = { _ in }
 
     @State private var dragging: Bookmark.ID?
     /// Where the drag under way would land, drawn as a line or a wash.
@@ -770,6 +803,7 @@ struct BookmarkOutline: View {
                 newFolder: node.isFolder ? {
                     bookmarks.askNewFolder(in: node.id) { _ in expanded.insert(node.id) }
                 } : nil,
+                openAll: node.isFolder ? { openFolder(node) } : nil,
                 remove: { bookmarks.askRemove(node) }
             )
             .id(node.id)
@@ -964,6 +998,8 @@ struct BookmarkOutline: View {
         let rename: () -> Void
         /// A folder in this one: only on a folder.
         let newFolder: (() -> Void)?
+        /// Every page in this folder, folders inside it included. Only on a folder.
+        let openAll: (() -> Void)?
         let remove: () -> Void
 
         @State private var hovering = false
@@ -1014,6 +1050,11 @@ struct BookmarkOutline: View {
             .onTapGesture { open?() ?? toggle?() }
             .onHover { hovering = $0 }
             .contextMenu {
+                if let openAll {
+                    Button("Open All in Tabs", action: openAll)
+                        .disabled(Bookmarks.pages(in: [node]).isEmpty)
+                    Divider()
+                }
                 if let open {
                     Button("Open", action: open)
                     Divider()
@@ -1252,9 +1293,13 @@ struct BookmarksDropdown: View {
                         browser.pickBookmark(url)
                     } openInNewTab: { url in
                         browser.pickBookmark(url, inNewTab: true)
+                    } openFolder: { folder in
+                        browser.openAllInTabs([folder])
                     }
                     .padding(6)
                 }
+                .contentShape(Rectangle())
+                .contextMenu { openAll(bookmarks.roots) }
                 .frame(height: listHeight)
             }
             Divider().overlay(Palette.hairline)
@@ -1268,6 +1313,13 @@ struct BookmarksDropdown: View {
         }
         .frame(width: 280)
         .popoverGround(card: true)
+    }
+
+    /// The list's empty space: every bookmark, folders opened in order.
+    @ViewBuilder
+    private func openAll(_ nodes: [Bookmark]) -> some View {
+        Button("Open All in Tabs") { browser.openAllInTabs(nodes) }
+            .disabled(Bookmarks.pages(in: nodes).isEmpty)
     }
 
     /// The list as tall as the whole tree would be with every folder open,
@@ -1358,12 +1410,16 @@ struct BookmarksPanel: View {
                                     browser.pickBookmark(url)
                                 } openInNewTab: { url in
                                     browser.pickBookmark(url, inNewTab: true)
+                                } openFolder: { folder in
+                                    browser.openAllInTabs([folder])
                                 }
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 6)
                             }
                             .padding(.bottom, 2)
                         }
+                        .contentShape(Rectangle())
+                        .contextMenu { openAll(bookmarks.roots) }
                         .listHeight(440)
                         // A bookmark found is shown where it lives, which
                         // may be below what shows. This list is only made
@@ -1396,6 +1452,13 @@ struct BookmarksPanel: View {
         .onAppear { hunting = true }
     }
 
+    /// The list's empty space: every bookmark, folders opened in order.
+    @ViewBuilder
+    private func openAll(_ nodes: [Bookmark]) -> some View {
+        Button("Open All in Tabs") { browser.openAllInTabs(nodes) }
+            .disabled(Bookmarks.pages(in: nodes).isEmpty)
+    }
+
     /// What the search finds, flat, each with the folders it is in. Nothing
     /// here is dragged: it is put in order in the tree.
     @ViewBuilder
@@ -1412,6 +1475,7 @@ struct BookmarksPanel: View {
                             node: hit.node,
                             path: hit.path,
                             open: hit.node.url.flatMap(URL.init(string:)).map { url in { browser.pickBookmark(url) } },
+                            openAll: hit.node.isFolder ? { browser.openAllInTabs([hit.node]) } : nil,
                             show: { show(hit.node) }
                         )
                     }
@@ -1447,6 +1511,8 @@ struct BookmarksPanel: View {
         let path: [String]
         /// Nil for a folder, which is shown in the tree instead.
         let open: (() -> Void)?
+        /// A folder's pages, including the folders inside it.
+        let openAll: (() -> Void)?
         let show: () -> Void
 
         @State private var hovering = false
@@ -1482,6 +1548,10 @@ struct BookmarksPanel: View {
             .onTapGesture { open?() ?? show() }
             .onHover { hovering = $0 }
             .contextMenu {
+                if let openAll {
+                    Button("Open All in Tabs", action: openAll)
+                        .disabled(Bookmarks.pages(in: [node]).isEmpty)
+                }
                 if let open { Button("Open", action: open) }
                 Button("Show in Folder", action: show)
             }
